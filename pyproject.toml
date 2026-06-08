@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "llm-rl-playground"
+version = "0.1.0"
+description = "Tiny RL environments + graders + reward-hacking QA for LLMs (code + truthfulness tracks)."
+requires-python = ">=3.11"
+readme = "README.md"
+dependencies = []  # core (env, grader, reward-hacking QA) is pure stdlib
+
+[project.optional-dependencies]
+agent = ["anthropic>=0.40"]        # ClaudeAgent + truthfulness claim decomposition
+rl = ["gymnasium>=0.29"]            # CodeEnv uses gymnasium when present (falls back otherwise)
+mcp = ["mcp>=1.2"]                  # MCP server
+all = ["anthropic>=0.40", "gymnasium>=0.29", "mcp>=1.2"]
+dev = ["pytest>=7"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
