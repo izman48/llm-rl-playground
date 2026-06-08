@@ -6,3 +6,6 @@ venv/
 .pytest_cache/
 .env
 results/*.json
+
+# local planning doc (not for the public repo)
+PLAN.md
