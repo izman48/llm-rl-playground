@@ -10,7 +10,7 @@ grading open-ended answers and catching lies, where there is *no* ground-truth c
 
 ---
 
-## For reviewers (start here)
+## Overview
 
 A working miniature of the RL-data workflow: build the execution environment, write the
 grader, and **prove the grader can't be reward-hacked** — for both verifiable (code) and
@@ -58,7 +58,7 @@ pip install -e .            # core only — runs the QA + tests below
 
 The core (environment, grader, reward-hacking QA) is **pure standard library** — it installs
 and runs with zero third-party packages. The agent, MCP server, and gymnasium are optional
-extras, so a reviewer is never blocked on a dependency or a key.
+extras, so you're never blocked on a dependency or a key.
 
 ## Run it — least-setup first
 
@@ -120,25 +120,80 @@ citation, negation flip, vague dodge) and a **meta-eval** (`meta_eval.py`) that 
 against gold labels — because a weak verifier you haven't validated is not trustworthy.
 Honest framing: truthfulness verification is **not solved**, it's a *managed gap*.
 
-## Drive it from Claude Desktop (MCP)
+## Drive it over MCP
 
-The gym is also an MCP server. Point Claude Desktop at it:
+The gym is also an MCP server, exposing four tools: `list_tasks`, `get_task`,
+`submit_solution`, and `run_qa`.
+
+**The one prerequisite:** the `mcp` package must be importable by the Python that runs the
+server. Either install the extra into a venv (`pip install -e ".[mcp]"`, the repo default) or
+install it globally (`pip install mcp`). Every option below then just points at a Python that
+has it. Pointing at the venv's interpreter (`.venv/bin/python`) is the reliable choice — a bare
+`python` from your PATH may not have `mcp` and will fail with `ModuleNotFoundError: mcp`.
+
+### Claude Desktop
+
+**Option A — one-click bundle (`.mcpb`).** A pre-built
+[`llm-rl-playground.mcpb`](llm-rl-playground.mcpb) ships in this repo. In Claude Desktop go to
+**Settings → Extensions** and drag the `.mcpb` onto the window (or *Install from file…*). During
+install, set the extension's **Python executable** field to an interpreter that has `mcp` (e.g.
+`/absolute/path/to/llm-rl-playground/.venv/bin/python`); it defaults to `python` on your PATH.
+Then toggle the extension on.
+
+Rebuild the bundle after changing the server:
+
+```bash
+npm install -g @anthropic-ai/mcpb
+mcpb pack . llm-rl-playground.mcpb      # uses manifest.json + .mcpbignore
+```
+
+**Option B — manual config.** Edit `claude_desktop_config.json` (**Settings → Developer → Edit
+Config**), then restart Claude Desktop:
 
 ```jsonc
-// claude_desktop_config.json
 {
   "mcpServers": {
     "llm-rl-playground": {
-      "command": "python",
+      "command": "/absolute/path/to/llm-rl-playground/.venv/bin/python",
       "args": ["/absolute/path/to/llm-rl-playground/scripts/run_mcp.py"]
     }
   }
 }
 ```
 
-Then ask Claude *"solve the tasks in the gym."* Watch it call `get_task` → write code →
-`submit_solution` → read its reward live; if it tries a trick, the `hack_signals` come back.
-Inspect the tools directly with `npx @modelcontextprotocol/inspector python scripts/run_mcp.py`.
+### Claude Code
+
+Register the server with one command (run it from anywhere; use absolute paths):
+
+```bash
+claude mcp add llm-rl-playground -- \
+  /absolute/path/to/llm-rl-playground/.venv/bin/python \
+  /absolute/path/to/llm-rl-playground/scripts/run_mcp.py
+```
+
+Verify and inspect:
+
+```bash
+claude mcp list                      # shows llm-rl-playground ✓ connected
+claude mcp get llm-rl-playground     # shows the command it will run
+```
+
+Inside a session, `/mcp` lists the server and its four tools. Use `claude mcp remove
+llm-rl-playground` to undo. (The `.mcpb` bundle is a Claude Desktop installer format — for
+Claude Code, use `claude mcp add` as above.)
+
+### MCP Inspector (quick visual test, no host)
+
+```bash
+npx @modelcontextprotocol/inspector .venv/bin/python scripts/run_mcp.py
+```
+
+Opens a browser UI to click each tool and read the JSON responses directly.
+
+---
+
+Once connected, ask Claude *"solve the tasks in the gym."* Watch it call `get_task` → write code
+→ `submit_solution` → read its reward live; if it tries a trick, the `hack_signals` come back.
 
 ## Threat model (honest limits)
 
@@ -158,4 +213,5 @@ src/playground/
   truthfulness/   grader.py  claims.py  honeypots.py  meta_eval.py  exploits.py
 scripts/   run_qa.py  run_rollouts.py  run_mcp.py  run_truthfulness_metaeval.py
 tests/     test_sandbox/grader/env/reward_hacking/mcp_server/truthfulness
+manifest.json  .mcpbignore  llm-rl-playground.mcpb   # MCP bundle (one-click install)
 ```
