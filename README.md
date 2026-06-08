@@ -17,7 +17,7 @@ grader, and **prove the grader can't be reward-hacked** — for both verifiable 
 non-verifiable (truthfulness) tasks.
 
 **60-second tour:**
-1. `python scripts/run_qa.py` — every cheat attempt scores ~0 (the anti-reward-hacking proof).
+1. `python scripts/run_qa.py` — every cheat attempt scores ~0 on every task (the anti-reward-hacking proof).
 2. Skim `src/playground/sandbox.py` (isolated execution), `grader.py` (held-out-test reward),
    and `qa/exploits.py` + `qa/checks.py` (exploit catalog + detector).
 3. `python scripts/run_rollouts.py --agent scripted` — the full rollout loop end-to-end (no key).
@@ -29,7 +29,7 @@ non-verifiable (truthfulness) tasks.
 | the execution environments RL tasks run in | `src/playground/env.py` (Gymnasium) + `sandbox.py` |
 | prompts, evals, and **graders** | `grader.py`, `truthfulness/grader.py`, `rollout.py` |
 | QA frameworks to catch **reward hacking** | `qa/` + `tests/test_reward_hacking.py` |
-| **sandboxing** execution environments | `sandbox.py` (timeouts, rlimits, no-answers-on-disk) |
+| **sandboxing** execution environments | `sandbox.py` (timeout + best-effort rlimits — CPU; memory where supported, no-answers-on-disk) |
 | third-party tool/API connector (**MCP servers**) | `src/playground/mcp/server.py` |
 | RL on LLMs / reward design | code track (RLVR) + truthfulness track |
 
@@ -62,12 +62,13 @@ extras, so you're never blocked on a dependency or a key.
 
 ## Run it — least-setup first
 
-**1 · Prove the environment can't be cheated** — *no key, ~5s. The headline.*
+**1 · Prove the environment can't be cheated** — *no key, ~10s. The headline.*
 ```bash
 python scripts/run_qa.py
 ```
 → a table where every planted cheat (hardcoding, reading the test file, fake-exit, infinite
-loop, …) scores ~0, ending in `Environment is NOT gameable.`
+loop, …) — generated for and run against **all 8 tasks** — scores ~0, ending in
+`Environment is NOT gameable.`
 
 **2 · Run the test suite** — *no key.*
 ```bash
@@ -93,7 +94,7 @@ python scripts/run_truthfulness_metaeval.py
 ```bash
 python scripts/run_mcp.py        # serves over stdio
 ```
-See "Drive it from Claude Desktop" below.
+See "Drive it over MCP" below.
 
 ---
 
@@ -112,13 +113,17 @@ that's what makes the anti-cheat scale (you don't re-patch per problem).
 
 ## Track 2 — verifying open-ended answers (the don't-lie track)
 
-Code is the easy case. Most user queries have no automatic checker, so Track 2 turns one
-unverifiable judgment into many smaller verifiable ones: **decompose** an answer into atomic
-claims, **verify** each against provided sources, **check citations**, and reward calibrated
-**abstention**. The grader has its **own** reward-hacking QA (confident liar, fabricated
-citation, negation flip, vague dodge) and a **meta-eval** (`meta_eval.py`) that validates it
-against gold labels — because a weak verifier you haven't validated is not trustworthy.
-Honest framing: truthfulness verification is **not solved**, it's a *managed gap*.
+Code is the easy case. Most user queries have no automatic checker. Track 2 is an
+**illustrative sketch** of how you'd attack that harder problem — a toy, not a finished
+verifier. It turns one unverifiable judgment into smaller checkable ones: **decompose** an
+answer into atomic claims (an optional online step via Claude in `claims.py`, *not exercised
+by the keyless QA*), **verify** each against provided sources (a **toy token-overlap proxy**
+standing in for an NLI/LLM verifier), **check citations** exist, and give honest **abstention**
+a small fixed credit. The grader has its **own** reward-hacking fixtures (confident liar,
+fabricated citation, negation flip, vague dodge) and a **meta-eval** (`meta_eval.py`) that
+measures grader-vs-gold agreement (accuracy + Cohen's κ) on a **small n=5 labeled set — a smoke
+check, not a statistical guarantee**. Honest framing: truthfulness verification is **not
+solved**; this track is a signpost to the next step (see *What's missing / what's next*).
 
 ## Drive it over MCP
 
@@ -195,12 +200,22 @@ Opens a browser UI to click each tool and read the JSON responses directly.
 Once connected, ask Claude *"solve the tasks in the gym."* Watch it call `get_task` → write code
 → `submit_solution` → read its reward live; if it tries a trick, the `hack_signals` come back.
 
-## Threat model (honest limits)
+## What's missing / what's next
 
-The sandbox is a *best-effort educational* boundary, not a security product: process
-isolation, resource limits, timeouts, and a design where the answer key never reaches the
-sandbox. It does **not** provide kernel-level isolation; for untrusted code at scale you'd
-reach for containers / gVisor / network namespaces. Naming the gap is deliberate.
+Stated plainly, so the gaps aren't hidden:
+
+- **The sandbox is best-effort, not a security product.** Process isolation, wall-clock
+  timeout, CPU-time limit, and a design where the answer key never reaches the sandbox — but
+  **no kernel-level isolation**, and the memory limit (`RLIMIT_AS`) is a **no-op on macOS**.
+  For untrusted code at scale: containers / gVisor / network namespaces.
+- **Verifiable rewards only cover code.** The strong, un-gameable reward is RLVR on code
+  (Track 1), proven across all tasks by `scripts/run_qa.py`. **Non-verifiable (truthfulness)
+  rewards are the sketched next step**, not a finished feature — today's Track 2 is a toy: a
+  token-overlap verifier, an n=5 meta-eval, and a decomposition step not wired into the keyless QA.
+- **Scaling the anti-cheat.** Add more tasks and exploit categories to the generator
+  (`qa/exploits.py` — each new strategy is checked against the whole task set automatically),
+  feed the per-category detector signals into a monitor/classifier, and for Track 2 swap in a
+  real NLI/LLM verifier with a larger labeled honeypot set so the meta-eval becomes meaningful.
 
 ## Layout
 
