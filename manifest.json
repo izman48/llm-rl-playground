@@ -1,0 +1,61 @@
+{
+  "$schema": "https://raw.githubusercontent.com/anthropics/mcpb/main/schemas/mcpb-manifest-latest.schema.json",
+  "manifest_version": "0.3",
+  "name": "llm-rl-playground",
+  "display_name": "LLM RL Playground",
+  "version": "0.1.0",
+  "description": "Drive the RL gym over MCP: list coding tasks, submit sandboxed solutions, and run the reward-hacking QA.",
+  "long_description": "A miniature RL-data workflow exposed over the Model Context Protocol. The bundled stdio server lets any MCP host (Claude Desktop, the MCP Inspector) list coding tasks, fetch a task's public spec, submit a Python solution that is graded sandboxed against held-out tests, and run the reward-hacking QA suite. Grading and anti-cheat are unchanged — the server is only a standard doorway onto functions that already exist in the repo. Held-out tests and expected outputs never leave the sandbox.",
+  "author": {
+    "name": "Iesa Wazeer",
+    "email": "iesa.wazeer7@gmail.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/izman48/llm-rl-playground"
+  },
+  "homepage": "https://github.com/izman48/llm-rl-playground",
+  "documentation": "https://github.com/izman48/llm-rl-playground#readme",
+  "keywords": ["rl", "reward-hacking", "mcp", "sandbox", "grader", "rlvr"],
+  "server": {
+    "type": "python",
+    "entry_point": "scripts/run_mcp.py",
+    "mcp_config": {
+      "command": "${user_config.python_path}",
+      "args": ["${__dirname}/scripts/run_mcp.py"]
+    }
+  },
+  "tools": [
+    {
+      "name": "list_tasks",
+      "description": "List the coding tasks available in the gym."
+    },
+    {
+      "name": "get_task",
+      "description": "Get a task's spec and PUBLIC example cases (held-out tests are never returned)."
+    },
+    {
+      "name": "submit_solution",
+      "description": "Run a Python solution sandboxed against held-out tests; returns reward + signals."
+    },
+    {
+      "name": "run_qa",
+      "description": "Run the reward-hacking QA suite; returns each exploit's reward (all should be ~0)."
+    }
+  ],
+  "user_config": {
+    "python_path": {
+      "type": "string",
+      "title": "Python executable",
+      "description": "Path to a Python 3.11+ interpreter that has the `mcp` package installed (e.g. your project's .venv/bin/python, or after `pip install mcp`). Defaults to `python` on your PATH.",
+      "required": false,
+      "default": "python"
+    }
+  },
+  "compatibility": {
+    "platforms": ["darwin", "linux", "win32"],
+    "runtimes": {
+      "python": ">=3.11"
+    }
+  }
+}

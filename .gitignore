@@ -9,3 +9,6 @@ results/*.json
 
 # local planning doc (not for the public repo)
 PLAN.md
+
+# machine-specific local MCP host config (absolute paths)
+mcp.json

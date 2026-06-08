@@ -1,0 +1,23 @@
+# Keep the bundle to just what the MCP server needs to run.
+# (mcpb already excludes .git, .gitignore, node_modules, and the manifest itself.)
+
+# Build artifact — never ship the bundle inside itself.
+*.mcpb
+
+# Python caches / envs / build output.
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.env
+
+# Repo material the server doesn't need at runtime.
+tests/
+results/
+PLAN.md
+.env.example
+
+# Machine-specific local host config (absolute paths) — not for the bundle.
+mcp.json
