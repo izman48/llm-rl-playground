@@ -17,6 +17,12 @@ mcp = ["mcp>=1.2"]                  # MCP server
 all = ["anthropic>=0.40", "gymnasium>=0.29", "mcp>=1.2"]
 dev = ["pytest>=7"]
 
+[project.scripts]
+rl-qa = "playground.qa.report:cli_main"
+rl-rollouts = "playground.rollout:main"
+rl-mcp = "playground.mcp.server:main"
+rl-metaeval = "playground.truthfulness.meta_eval:main"
+
 [tool.setuptools.packages.find]
 where = ["src"]
 

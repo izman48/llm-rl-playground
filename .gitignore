@@ -12,3 +12,6 @@ PLAN.md
 
 # machine-specific local MCP host config (absolute paths)
 mcp.json
+
+# type-checker cache
+.mypy_cache/

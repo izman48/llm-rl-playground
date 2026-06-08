@@ -1,17 +1,20 @@
 """Best-effort sandboxed execution of candidate solutions.
 
 This is an *educational* sandbox, not a security boundary. It uses process
-isolation, a wall-clock timeout, and POSIX resource limits — and, most
-importantly, a design where **the expected outputs never enter the sandbox**.
-The subprocess receives only the function arguments; it must actually compute
-the answers, because they are not present anywhere on disk or in the
+isolation, a wall-clock timeout, and best-effort POSIX resource limits (CPU time
+always; address-space/memory only where the OS enforces RLIMIT_AS — not macOS) —
+and, most importantly, a design where **the expected outputs never enter the
+sandbox**. The subprocess receives only the function arguments; it must actually
+compute the answers, because they are not present anywhere on disk or in the
 environment. That single property structurally defeats the most common reward
 hacks (reading the answer key, hardcoding hidden answers).
 
 Result integrity: the runner emits results on a stdout line prefixed with a
-per-run nonce that the candidate cannot guess (the runner consumes stdin and
-scrubs the environment before importing the candidate). Anything the candidate
-prints itself is ignored, so it cannot forge a "pass".
+per-run nonce that the candidate cannot guess. The runner reads the whole job
+from stdin *before* importing the candidate (so candidate code cannot intercept
+the nonce or inputs) and runs under ``-E -s`` (no PYTHON* env vars, no user
+site). Anything the candidate prints itself lacks the nonce and is ignored, so
+it cannot forge a "pass".
 
 Residual risk (documented on purpose): no kernel-level isolation. For untrusted
 code at scale you would use containers / gVisor / network namespaces.
@@ -31,13 +34,12 @@ from typing import Any
 # (consuming it fully *before* importing the candidate so candidate code cannot
 # read the nonce/inputs), runs each case, and writes a nonce-marked results line.
 _RUNNER = r'''
-import json, os, sys
+import json, sys
 
 _job = json.loads(sys.stdin.read())          # consume stdin before candidate import
 _nonce = _job["nonce"]
 _entry = _job["entry_point"]
 _inputs = _job["inputs"]
-os.environ.pop("RUNNER_NONCE", None)          # nothing sensitive left in env
 
 _results = []
 try:
