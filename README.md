@@ -17,10 +17,10 @@ grader, and **prove the grader can't be reward-hacked** — for both verifiable 
 non-verifiable (truthfulness) tasks.
 
 **60-second tour:**
-1. `python scripts/run_qa.py` — every cheat attempt scores ~0 on every task (the anti-reward-hacking proof).
+1. `uv run rl-qa` — every cheat attempt scores ~0 on every task (the anti-reward-hacking proof).
 2. Skim `src/playground/sandbox.py` (isolated execution), `grader.py` (held-out-test reward),
    and `qa/exploits.py` + `qa/checks.py` (exploit catalog + detector).
-3. `python scripts/run_rollouts.py --agent scripted` — the full rollout loop end-to-end (no key).
+3. `uv run rl-rollouts --agent scripted` — the full rollout loop end-to-end (no key).
 
 **Where each responsibility shows up:**
 
@@ -40,7 +40,7 @@ harder to fool than the policy is at fooling them.**
 
 ## Requirements
 
-- **Python 3.11+**
+- **Python 3.11+** and **[uv](https://docs.astral.sh/uv/)**
 - **An Anthropic API key** — only for the live Claude agent (rollouts) and the online
   truthfulness decomposition. **Everything else, including the headline QA, needs no key.**
 - **Node.js** — optional, only for the MCP Inspector.
@@ -50,21 +50,28 @@ harder to fool than the policy is at fooling them.**
 ```bash
 git clone <your-repo-url>
 cd llm-rl-playground
-python -m venv .venv && source .venv/bin/activate     # Windows: .venv\Scripts\activate
-
-pip install -e .            # core only — runs the QA + tests below
-# pip install -e ".[all]"   # + Claude agent, gymnasium, and the MCP server
 ```
 
-The core (environment, grader, reward-hacking QA) is **pure standard library** — it installs
-and runs with zero third-party packages. The agent, MCP server, and gymnasium are optional
-extras, so you're never blocked on a dependency or a key.
+**`uv run` syncs the environment automatically** — no manual install step. The core
+(environment, grader, reward-hacking QA) is **pure standard library**; optional extras
+(`agent`, `mcp`, `rl`, `dev`) are pulled in on demand with `--extra`.
+
+| Command | Extra needed |
+|---|---|
+| `uv run rl-qa` | none |
+| `uv run --extra dev pytest -q` | `dev` |
+| `uv run rl-rollouts --agent scripted` | none |
+| `uv run --extra agent rl-rollouts --agent claude` | `agent` |
+| `uv run rl-metaeval` | none |
+| `uv run --extra mcp rl-mcp` | `mcp` |
+
+Use `--all-extras` instead of `--extra <name>` if you want every optional dependency at once.
 
 ## Run it — least-setup first
 
 **1 · Prove the environment can't be cheated** — *no key, ~10s. The headline.*
 ```bash
-python scripts/run_qa.py
+uv run rl-qa
 ```
 → a table where every planted cheat (hardcoding, reading the test file, fake-exit, infinite
 loop, …) — generated for and run against **all 8 tasks** — scores ~0, ending in
@@ -72,29 +79,32 @@ loop, …) — generated for and run against **all 8 tasks** — scores ~0, endi
 
 **2 · Run the test suite** — *no key.*
 ```bash
-pip install pytest && pytest -v        # or: pip install -e ".[dev]"
+uv run --extra dev pytest -q
 ```
 → sandbox, grader, environment, reward-hacking, MCP-logic, and truthfulness suites green.
 
-**3 · Run the rollout loop** — *`--agent scripted` needs no key; `claude` needs a key + `[agent]`.*
+**3 · Run the rollout loop** — *`--agent scripted` needs no key; `claude` needs a key + `agent` extra.*
 ```bash
-python scripts/run_rollouts.py --agent scripted        # offline baseline
-python scripts/run_rollouts.py --agent claude --n 10   # real Claude (claude-opus-4-8)
+uv run rl-rollouts --agent scripted                  # offline baseline
+ANTHROPIC_API_KEY=sk-ant-... uv run --extra agent rl-rollouts --agent claude --n 10
 ```
 → per-episode rewards + a summary: **pass rate** and **reward-hack rate**; saved to
 `results/rollouts.json`.
 
 **4 · Validate the truthfulness grader (Track 2)** — *no key.*
 ```bash
-python scripts/run_truthfulness_metaeval.py
+uv run rl-metaeval
 ```
 → the grader's lie-detection vs. gold labels (accuracy + Cohen's κ) on the honeypots.
 
-**5 · Drive it live over MCP** — *needs `[mcp]`.*
+**5 · Drive it live over MCP** — *needs `mcp` extra.*
 ```bash
-python scripts/run_mcp.py        # serves over stdio
+uv run --extra mcp rl-mcp        # serves over stdio
 ```
 See "Drive it over MCP" below.
+
+The `scripts/run_*.py` wrappers still work (`uv run python scripts/run_qa.py`, etc.) if you
+prefer explicit paths.
 
 ---
 
@@ -130,20 +140,17 @@ solved**; this track is a signpost to the next step (see *What's missing / what'
 The gym is also an MCP server, exposing four tools: `list_tasks`, `get_task`,
 `submit_solution`, and `run_qa`.
 
-**The one prerequisite:** the `mcp` package must be importable by the Python that runs the
-server. Either install the extra into a venv (`pip install -e ".[mcp]"`, the repo default) or
-install it globally (`pip install mcp`). Every option below then just points at a Python that
-has it. Pointing at the venv's interpreter (`.venv/bin/python`) is the reliable choice — a bare
-`python` from your PATH may not have `mcp` and will fail with `ModuleNotFoundError: mcp`.
+**The one prerequisite:** the `mcp` extra must be available when the server starts —
+`uv run --extra mcp` pulls it in automatically.
 
 ### Claude Desktop
 
 **Option A — one-click bundle (`.mcpb`).** A pre-built
 [`llm-rl-playground.mcpb`](llm-rl-playground.mcpb) ships in this repo. In Claude Desktop go to
 **Settings → Extensions** and drag the `.mcpb` onto the window (or *Install from file…*). During
-install, set the extension's **Python executable** field to an interpreter that has `mcp` (e.g.
-`/absolute/path/to/llm-rl-playground/.venv/bin/python`); it defaults to `python` on your PATH.
-Then toggle the extension on.
+install, set the extension's **command** to `uv` and **args** to
+`run --directory /absolute/path/to/llm-rl-playground --extra mcp rl-mcp` (or point
+**Python executable** at any interpreter that already has `mcp`). Then toggle the extension on.
 
 Rebuild the bundle after changing the server:
 
@@ -159,8 +166,13 @@ Config**), then restart Claude Desktop:
 {
   "mcpServers": {
     "llm-rl-playground": {
-      "command": "/absolute/path/to/llm-rl-playground/.venv/bin/python",
-      "args": ["/absolute/path/to/llm-rl-playground/scripts/run_mcp.py"]
+      "command": "uv",
+      "args": [
+        "run",
+        "--directory", "/absolute/path/to/llm-rl-playground",
+        "--extra", "mcp",
+        "rl-mcp"
+      ]
     }
   }
 }
@@ -172,8 +184,7 @@ Register the server with one command (run it from anywhere; use absolute paths):
 
 ```bash
 claude mcp add llm-rl-playground -- \
-  /absolute/path/to/llm-rl-playground/.venv/bin/python \
-  /absolute/path/to/llm-rl-playground/scripts/run_mcp.py
+  uv run --directory /absolute/path/to/llm-rl-playground --extra mcp rl-mcp
 ```
 
 Verify and inspect:
@@ -190,7 +201,7 @@ Claude Code, use `claude mcp add` as above.)
 ### MCP Inspector (quick visual test, no host)
 
 ```bash
-npx @modelcontextprotocol/inspector .venv/bin/python scripts/run_mcp.py
+npx @modelcontextprotocol/inspector uv run --extra mcp rl-mcp
 ```
 
 Opens a browser UI to click each tool and read the JSON responses directly.
@@ -209,7 +220,7 @@ Stated plainly, so the gaps aren't hidden:
   **no kernel-level isolation**, and the memory limit (`RLIMIT_AS`) is a **no-op on macOS**.
   For untrusted code at scale: containers / gVisor / network namespaces.
 - **Verifiable rewards only cover code.** The strong, un-gameable reward is RLVR on code
-  (Track 1), proven across all tasks by `scripts/run_qa.py`. **Non-verifiable (truthfulness)
+  (Track 1), proven across all tasks by `uv run rl-qa`. **Non-verifiable (truthfulness)
   rewards are the sketched next step**, not a finished feature — today's Track 2 is a toy: a
   token-overlap verifier, an n=5 meta-eval, and a decomposition step not wired into the keyless QA.
 - **Scaling the anti-cheat.** Add more tasks and exploit categories to the generator

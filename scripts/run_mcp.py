@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """Launch the MCP server over stdio (drive the gym from Claude Desktop / Inspector).
 
-Needs `pip install -e ".[mcp]"`.
+Needs `uv run --extra mcp rl-mcp` (or `pip install -e ".[mcp]"`).
 """
 import _bootstrap  # noqa: F401
 from playground.mcp.server import main

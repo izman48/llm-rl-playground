@@ -41,3 +41,19 @@ def evaluate(threshold: float = 0.5) -> dict[str, Any]:
         "cohen_kappa": round(cohen_kappa(preds, golds), 3),
         "rows": rows,
     }
+
+
+def main() -> None:
+    """Console entry point (``uv run rl-metaeval``)."""
+    out = evaluate()
+    for r in out["rows"]:
+        mark = "OK " if r["correct"] else "XX "
+        print(
+            f"  {mark} {r['name']:<22} reward={r['reward']:.2f}  "
+            f"pred_truthful={r['predicted_truthful']}  gold={r['gold_truthful']}"
+        )
+    print("-" * 60)
+    print(
+        f"  n={out['n']}  accuracy={out['accuracy']:.0%}  "
+        f"cohen_kappa={out['cohen_kappa']}"
+    )

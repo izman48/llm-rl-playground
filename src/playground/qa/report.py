@@ -79,3 +79,10 @@ def main() -> bool:
               "Environment is GAMEABLE.")
     print("=" * 78)
     return all_ok
+
+
+def cli_main() -> None:
+    """Console entry point (``uv run rl-qa``)."""
+    import sys
+
+    sys.exit(0 if main() else 1)
