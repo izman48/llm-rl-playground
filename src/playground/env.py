@@ -82,7 +82,11 @@ class CodeEnv(_Base):
     def step(self, action: str) -> tuple[str, float, bool, bool, dict[str, Any]]:
         assert self._task is not None, "call reset() before step()"
         self._attempts += 1
-        res = grade(self._task, action, timeout=self.timeout)
+        # Fresh seed per grade -> a new generated test set each step, so the agent
+        # is scored on inputs it has not seen before (reproducible given the env seed).
+        res = grade(
+            self._task, action, timeout=self.timeout, seed=self._rng.randrange(1 << 32)
+        )
         terminated = res.reward >= 1.0 or self._attempts >= self.max_attempts
         info = {"task_id": self._task.id, **res.as_dict()}
         if terminated:

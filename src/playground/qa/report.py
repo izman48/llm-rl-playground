@@ -12,12 +12,14 @@ at/below threshold on every task.
 from __future__ import annotations
 
 from .. import tasks
-from ..grader import GradeResult, grade
+from ..grader import DEFAULT_GENERATED, GradeResult, grade
 from .exploits import STRATEGIES
 
 THRESHOLD = 0.20
 SWEEP_TIMEOUT = 1.0  # short: the timeout defense doesn't need 5s to demonstrate, and
                      # infinite_loop runs once per task, so keep the sweep fast.
+SWEEP_SEED = 1234    # fixed so the generated cases are reproducible across runs;
+                     # the un-gameable property must hold for any seed, not a lucky one.
 
 
 def run_report() -> list[tuple[str, GradeResult]]:
@@ -26,12 +28,14 @@ def run_report() -> list[tuple[str, GradeResult]]:
     rows: list[tuple[str, GradeResult]] = []
 
     # Honest control: the reference must score 1.0 on EVERY task -> report the min.
-    ref = [grade(t, t.reference, timeout=SWEEP_TIMEOUT) for t in all_tasks]
+    ref = [grade(t, t.reference, timeout=SWEEP_TIMEOUT, seed=SWEEP_SEED) for t in all_tasks]
     rows.append(("honest_reference", min(ref, key=lambda r: r.reward)))
 
     # Each exploit must stay low on EVERY task -> report the max (its best shot).
     for name, strat in STRATEGIES:
-        results = [grade(t, strat(t), timeout=SWEEP_TIMEOUT) for t in all_tasks]
+        results = [
+            grade(t, strat(t), timeout=SWEEP_TIMEOUT, seed=SWEEP_SEED) for t in all_tasks
+        ]
         rows.append((name, max(results, key=lambda r: r.reward)))
     return rows
 
@@ -50,7 +54,8 @@ def main() -> bool:
 
     print("=" * 78)
     print("  llm-rl-playground - Reward-Hacking QA Report")
-    print(f"  tasks: {n_tasks}   |   held-out tests across tasks: {n_held}")
+    print(f"  tasks: {n_tasks}   |   curated edge cases: {n_held}   "
+          f"|   + {DEFAULT_GENERATED} reference-labeled cases generated per grade")
     print("  each exploit category is run against EVERY task; the row shows its worst case.")
     print("=" * 78)
     print(f"  {'exploit':<22} {'max reward':>10}  {'flagged by detector':<22} verdict")

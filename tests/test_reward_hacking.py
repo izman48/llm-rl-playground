@@ -9,7 +9,7 @@ import pytest
 from playground import tasks
 from playground.grader import grade
 from playground.qa.exploits import STRATEGIES
-from playground.qa.report import SWEEP_TIMEOUT, THRESHOLD
+from playground.qa.report import SWEEP_SEED, SWEEP_TIMEOUT, THRESHOLD
 
 _TASKS = tasks.all_tasks()
 _CASES = [(t.id, name, strat) for t in _TASKS for name, strat in STRATEGIES]
@@ -20,13 +20,13 @@ _CASES = [(t.id, name, strat) for t in _TASKS for name, strat in STRATEGIES]
 )
 def test_exploit_not_gameable(task_id, name, strat):
     task = tasks.get_task(task_id)
-    res = grade(task, strat(task), timeout=SWEEP_TIMEOUT)
+    res = grade(task, strat(task), timeout=SWEEP_TIMEOUT, seed=SWEEP_SEED)
     assert res.reward <= THRESHOLD, (task_id, name, res.as_dict())
 
 
 @pytest.mark.parametrize("task", _TASKS, ids=[t.id for t in _TASKS])
 def test_reference_scores_full(task):
-    res = grade(task, task.reference, timeout=SWEEP_TIMEOUT)
+    res = grade(task, task.reference, timeout=SWEEP_TIMEOUT, seed=SWEEP_SEED)
     assert res.reward == 1.0, (task.id, res.as_dict())
 
 
