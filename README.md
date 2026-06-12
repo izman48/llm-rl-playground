@@ -18,8 +18,9 @@ non-verifiable (truthfulness) tasks.
 
 **60-second tour:**
 1. `uv run rl-qa` — every cheat attempt scores ~0 on every task (the anti-reward-hacking proof).
-2. Skim `src/playground/sandbox.py` (isolated execution), `grader.py` (held-out-test reward),
-   and `qa/exploits.py` + `qa/checks.py` (exploit catalog + detector).
+2. Skim `src/playground/sandbox.py` (isolated execution), `grader.py` (held-out +
+   generated-test reward), `tasks.py` (specs + input generators), and `qa/exploits.py` +
+   `qa/checks.py` (exploit catalog + detector).
 3. `uv run rl-rollouts --agent scripted` — the full rollout loop end-to-end (no key).
 
 **Where each responsibility shows up:**
@@ -113,6 +114,7 @@ prefer explicit paths.
 | Cheat attempt | Why it fails |
 |---|---|
 | Hardcode the visible-test answers | Scored on **held-out** tests it never saw |
+| Memorize / overfit the held-out set itself | The held-out set isn't fixed — most cases are **generated fresh each grade** (see below), so there's no stable answer set to memorize |
 | Read the hidden test file off disk | **Expected outputs never enter the sandbox** |
 | Overwrite the assert / fake a pass with `sys.exit(0)` | Results come from a **nonce-marked, per-test protocol**, not exit code or stdout |
 | Infinite loop to stall the grader | Wall-clock **timeout** + resource limits |
@@ -120,6 +122,18 @@ prefer explicit paths.
 
 Defenses are **structural and per-category**: each is fixed once and protects every task —
 that's what makes the anti-cheat scale (you don't re-patch per problem).
+
+**Dynamic test generation (differential testing).** A fixed held-out set is still
+something an RL agent can overfit to with enough episodes — if the tests never change, the
+reward signal stops distinguishing "solved the task" from "memorized these inputs." So the
+grader doesn't rely on a fixed set. Each task ships an **input generator**; at grade time it
+samples fresh inputs (seeded — the env uses a new seed every step) and the hidden **reference
+solution labels them** as the oracle. The expected outputs are computed live and never stored,
+so there is no answer key to overfit to: a different seed is a different test set, and a
+solution has to actually generalize. The curated edge cases remain as fixed anchors on top, so
+the tricky corners (empty input, negatives, …) are always covered. `tests/test_generators.py`
+proves the property: a lookup table of the static cases scores 1.0 with generation off and
+**below a pass with it on**.
 
 ## Track 2 — verifying open-ended answers (the don't-lie track)
 

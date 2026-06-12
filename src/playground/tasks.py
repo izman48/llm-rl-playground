@@ -1,22 +1,107 @@
 """Coding tasks for the code track.
 
 Each task ships a natural-language spec, a handful of *public* example cases
-(shown to the agent), a larger set of *held-out* cases (the reward signal, never
-shown), and a reference solution (used for sanity checks — also never shown).
+(shown to the agent), a small set of curated *held-out* edge cases, a reference
+solution (the source of truth — never shown), and an **input generator**.
 
-The held-out cases are what defeat "memorize the visible answers": a solution
-must generalize to inputs it has never seen.
+Two things defeat "memorize the visible answers":
+
+* the held-out edge cases are never shown; and
+* at grade time the generator synthesizes *fresh* inputs every run and the
+  reference solution labels them (see ``grader.py``). Because the expected
+  outputs are computed live from the reference rather than stored, there is no
+  fixed answer key to overfit to — a different seed yields a different test set,
+  so a solution must generalize, not memorize.
+
+The generator (``gen_input``) runs in the trusted parent process and returns an
+argument tuple; it only needs to stay inside the spec's input domain, since the
+reference provides the expected output.
 """
 from __future__ import annotations
 
+import random
+import string
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Callable
 
 
 @dataclass(frozen=True)
 class Case:
     args: tuple[Any, ...]
     expected: Any
+
+
+# Per-task input generators. Each takes a seeded ``random.Random`` and returns a
+# fresh argument tuple inside the task's input domain. The reference solution
+# turns these inputs into expected outputs at grade time (differential testing),
+# so generators never need to know the answer — only how to sample valid inputs.
+def _rand_text(rng: random.Random, lo: int = 0, hi: int = 24) -> str:
+    alphabet = string.ascii_letters + "0123456789   ,.!?:"
+    return "".join(rng.choice(alphabet) for _ in range(rng.randint(lo, hi)))
+
+
+def _rand_word(rng: random.Random, lo: int = 1, hi: int = 9) -> str:
+    return "".join(rng.choice(string.ascii_letters) for _ in range(rng.randint(lo, hi)))
+
+
+def _gen_text(rng: random.Random) -> tuple[Any, ...]:
+    return (_rand_text(rng),)
+
+
+def _gen_palindrome(rng: random.Random) -> tuple[Any, ...]:
+    # Half the time build a genuine palindrome so the True branch is exercised.
+    if rng.random() < 0.5:
+        base = _rand_text(rng, 0, 12)
+        return (base + base[::-1],)
+    return (_rand_text(rng),)
+
+
+def _gen_small_int(rng: random.Random) -> tuple[Any, ...]:
+    # Wide domain on purpose: a few memorized public values (fib 0/1/10) must be a
+    # negligible fraction of the input space, else "memorize the examples" earns
+    # spurious partial credit just from random collisions.
+    return (rng.randint(0, 90),)
+
+
+def _int_to_roman(n: int) -> str:
+    table = [
+        (1000, "M"), (900, "CM"), (500, "D"), (400, "CD"), (100, "C"),
+        (90, "XC"), (50, "L"), (40, "XL"), (10, "X"), (9, "IX"),
+        (5, "V"), (4, "IV"), (1, "I"),
+    ]
+    out: list[str] = []
+    for value, sym in table:
+        while n >= value:
+            out.append(sym)
+            n -= value
+    return "".join(out)
+
+
+def _gen_roman(rng: random.Random) -> tuple[Any, ...]:
+    return (_int_to_roman(rng.randint(1, 3999)),)
+
+
+def _gen_int_list(rng: random.Random) -> tuple[Any, ...]:
+    n = rng.randint(1, 12)  # non-empty: the spec requires a non-empty subarray
+    return ([rng.randint(-9, 9) for _ in range(n)],)
+
+
+def _rand_nested(rng: random.Random, depth: int) -> Any:
+    if depth >= 3 or rng.random() < 0.4:
+        return rng.randint(-9, 9)
+    return [_rand_nested(rng, depth + 1) for _ in range(rng.randint(0, 4))]
+
+
+def _gen_nested_list(rng: random.Random) -> tuple[Any, ...]:
+    return ([_rand_nested(rng, 1) for _ in range(rng.randint(0, 5))],)
+
+
+def _gen_sentence(rng: random.Random) -> tuple[Any, ...]:
+    words = []
+    for _ in range(rng.randint(0, 5)):
+        w = _rand_word(rng)
+        words.append("".join(rng.choice((c.upper(), c.lower())) for c in w))
+    return (" ".join(words),)
 
 
 @dataclass(frozen=True)
@@ -28,6 +113,7 @@ class Task:
     public_cases: tuple[Case, ...]
     held_out_cases: tuple[Case, ...]
     reference: str  # correct solution; for sanity checks only, never shown to agents
+    gen_input: Callable[[random.Random], tuple[Any, ...]] | None = None
 
     def prompt(self) -> str:
         lines = [
@@ -60,6 +146,7 @@ TASKS: tuple[Task, ...] = (
             _c("xyz!", expected="!zyx"),
         ),
         reference="def reverse_string(s):\n    return s[::-1]\n",
+        gen_input=_gen_text,
     ),
     Task(
         id="is_palindrome",
@@ -82,6 +169,7 @@ TASKS: tuple[Task, ...] = (
             "    t = [c.lower() for c in s if c.isalnum()]\n"
             "    return t == t[::-1]\n"
         ),
+        gen_input=_gen_palindrome,
     ),
     Task(
         id="count_vowels",
@@ -100,6 +188,7 @@ TASKS: tuple[Task, ...] = (
             "def count_vowels(s):\n"
             "    return sum(c.lower() in 'aeiou' for c in s)\n"
         ),
+        gen_input=_gen_text,
     ),
     Task(
         id="fibonacci",
@@ -121,6 +210,7 @@ TASKS: tuple[Task, ...] = (
             "        a, b = b, a + b\n"
             "    return a\n"
         ),
+        gen_input=_gen_small_int,
     ),
     Task(
         id="roman_to_int",
@@ -146,6 +236,7 @@ TASKS: tuple[Task, ...] = (
             "        prev = v\n"
             "    return total\n"
         ),
+        gen_input=_gen_roman,
     ),
     Task(
         id="max_subarray",
@@ -171,6 +262,7 @@ TASKS: tuple[Task, ...] = (
             "        best = max(best, cur)\n"
             "    return best\n"
         ),
+        gen_input=_gen_int_list,
     ),
     Task(
         id="flatten",
@@ -198,6 +290,7 @@ TASKS: tuple[Task, ...] = (
             "            out.append(x)\n"
             "    return out\n"
         ),
+        gen_input=_gen_nested_list,
     ),
     Task(
         id="title_case",
@@ -222,6 +315,7 @@ TASKS: tuple[Task, ...] = (
             "def title_case(s):\n"
             "    return ' '.join(w[:1].upper() + w[1:].lower() for w in s.split())\n"
         ),
+        gen_input=_gen_sentence,
     ),
 )
 
